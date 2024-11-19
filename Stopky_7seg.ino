@@ -1,3 +1,9 @@
+// Autor TomHam
+// ArduinoIDE v 1.8.13
+
+// -------------------------------------------------------------------------------------------------
+// konstanty, nahrada #define
+// tlacitka a jine vstupy
 const int BtnRez = A1;        // Rezerva
 const int BtnInc = A2;        // inkrementace
 const int BtnDec = A3;        // dekrementace
@@ -19,20 +25,11 @@ const int Digit1 = 12;    // sekundy
 const int Digit2 = 13;    // desitky sekund
 const int Digit3 = 14;    // minuty
 
-// promenne
-int RealTime = 0;                       // realne mereny cas v sekundach
-int StartTime = 0;                      // cas startu, vychazi z millis()
-bool TimerRunning = false;              // flag stopek, spusteno/nespusteno
-int DisplayRefreshPeriod = 10;          // interval pro aktualizaci displeje (10 ms) -> 100 Hz
-int DigitValues[3] = {0, 0, 0};         // cisla k vykresleni na 7seg
-int DisplayBrightness = 128;            // jas PWM (0-255)
-unsigned long LastDisplayUpdate = 0;
-bool bIncrement = true;
-
-int inSerialData;
+// pocet digitu
+const int NumberOfDigits = 3;
 
 // Tabulka pro segmenty - zobrazeni znaku 0-9
-const uint8_t DigitSegments[10] = {
+const uint8_t DigitSegments[] = {
     0b1111110, // 0
     0b0110000, // 1
     0b1101101, // 2
@@ -45,17 +42,28 @@ const uint8_t DigitSegments[10] = {
     0b1111011  // 9
 };
 
+// -------------------------------------------------------------------------------------------------
+// promenne
+int RealCounter = 0;                       	// realne mereny cas v sekundach
+bool TimerRunning = false;              		// flag stopek, spusteno/nespusteno
+int DigitValues[NumberOfDigits];         		// cisla k vykresleni na 7seg
+bool bIncrement = true;											// nastaveni pricitani/odcitani casu
+int DisplayBright_DutyCycle;      					// jas PWM (0-100)
+
+// -------------------------------------------------------------------------------------------------
 // deklarace funkci
 void UpdateTime(void);  
 void SplitTimeToDigits(void);
-void RefreshDigit(int digit, int value, bool showDot);
-void RefreshDisplay(void);
+void SetDigit(int digit, int value, bool showDot);
+void RefreshDisplay_7seg(int RefreshPeriod, int DutyCycle);
 void CheckButtons(void);
-void UpdateSerialTime(void);
-void CheckSerial(void);
+void SerialTask(void);
 
-void setup() {
-  // initialize digital pin LED_BUILTIN as an output.
+// -------------------------------------------------------------------------------------------------
+// setup periferek
+void setup() 
+{
+  // init interni ledky
   pinMode(LED_BUILTIN, OUTPUT);
   
   // init Seg
@@ -76,110 +84,189 @@ void setup() {
   // init serial 9600 BaudRate
   Serial.begin(9600);
 }
-
-// the loop function runs over and over again forever
-void loop() {
-
-  CheckSerial();            // Obsluha seriove linky
- 
-  CheckButtons();           // Kontrola tlacitek a vstupnich periferek
-  UpdateTime();             // Aktualizace mereneho casu
-
-  // multiplexovani displeje s periodou 10 ms -> 100 Hz
-  if (millis() - LastDisplayUpdate >= DisplayRefreshPeriod) {
-      LastDisplayUpdate = millis();
-      RefreshDisplay();    // Aktualizace displeje 7seg
-  }
-
-  // aktualizace casu pres serial
-  UpdateSerialTime();     
+// -------------------------------------------------------------------------------------------------
+// main loop
+void loop() 
+{
+	// Obsluha seriove linky
+  SerialTask();            
+	
+	// Kontrola tlacitek a vstupnich periferek
+  CheckButtons();   
+	
+	// Aktualizace mereneho casu
+  UpdateTime();	
+	
+	// Refresh displeje s nastavenou periodou a svitivosti
+	RefreshDisplay_7seg(10, 50);
+	//RefreshDisplay_7seg(10, DisplayBright_DutyCycle);
 }
 
 
-// DEFINICE funkci
+// definice funkci
 // -------------------------------------------------------------------------------------------------
 // -------------------------------------------------------------------------------------------------
 // Aktualizace casu stopek
 // -------------------------------------------------------------------------------------------------
-void UpdateTime(void) {
-  // vykona se pouze pokud je flag running splnen
-  if (TimerRunning) {
-      RealTime = (millis() - StartTime) / 1000; // vysledek je cas v sekundach
-  }
+void UpdateTime(void) 
+{	
+	// pokud timer bezi
+	if(TimerRunning == true) 
+	{
+		// inkrement kazdou sekundu
+		if((millis() % 1000) == 0)
+		{
+			// rozsviceni ledky pro kontrolu periody
+			digitalWrite(LED_BUILTIN, HIGH);
+			delay(10); 
+			digitalWrite(LED_BUILTIN, LOW);
+			
+			// inkrementace counteru
+			if(bIncrement == true)
+			{
+				RealCounter++;
+			}
+			
+			// dekrementace counteru
+			else
+			{
+				RealCounter--;
+				
+				// osetreni zapornych hodnot
+				if(RealCounter <= 0)
+					RealCounter = 0;
+			}
+		}
+	}
 }
 
 // -------------------------------------------------------------------------------------------------
 // Rozdeleni casu na jednotlive cislice
 // -------------------------------------------------------------------------------------------------
-void SplitTimeToDigits() {
-    if(RealTime == 0){
-      // clear values
-      DigitValues[2] = 0;
-      DigitValues[1] = 0;
-      DigitValues[0] = 0;
-    }
-  
-    DigitValues[2] = RealTime / 60;          // minuty
-    DigitValues[1] = (RealTime % 60) / 10;   // desitky sekund
-    DigitValues[0] = RealTime % 10;           // sekundy
+void SplitTimeToDigits() 
+{
+	DigitValues[2] = RealCounter / 60;          // minuty
+	DigitValues[1] = (RealCounter % 60) / 10;   // desitky sekund
+	DigitValues[0] = RealCounter % 10;          // sekundy
 }
 
 // -------------------------------------------------------------------------------------------------
 // Zobrazení cislice na 7seg
 // -------------------------------------------------------------------------------------------------
-void RefreshDigit(int digit, int value, bool showDot) {
-    // vsechny anody OFF
-    digitalWrite(Digit1, LOW); 
-    digitalWrite(Digit2, LOW);
-    digitalWrite(Digit3, LOW); 
-    // prislusna anoda ON - u multiplexu sviti vzdy jen jedna
-    digitalWrite(digit, HIGH);
-    
-    byte segments = DigitSegments[value];
-    // maskovani a rozviceneni kokretniho segmentu displeje
-    digitalWrite(SegA, segments & B1000000);
-    digitalWrite(SegB, segments & B0100000);
-    digitalWrite(SegC, segments & B0010000);
-    digitalWrite(SegD, segments & B0001000);
-    digitalWrite(SegE, segments & B0000100);
-    digitalWrite(SegF, segments & B0000010);
-    digitalWrite(SegG, segments & B0000001);
-    // rozviceni DP podle flagu showDot
-    digitalWrite(SegDP, showDot);
+void SetDigit(int digit, int value, bool showDot) 
+{
+	// vsechny anody OFF
+	digitalWrite(Digit1, LOW); 
+	digitalWrite(Digit2, LOW);
+	digitalWrite(Digit3, LOW); 
+	
+	// prislusna anoda ON - u multiplexu sviti vzdy jen jedna
+	digitalWrite(digit, HIGH);
+	
+	byte segments = DigitSegments[value];
+	// maskovani a rozviceneni kokretniho segmentu displeje
+	digitalWrite(SegA, segments & B1000000);
+	digitalWrite(SegB, segments & B0100000);
+	digitalWrite(SegC, segments & B0010000);
+	digitalWrite(SegD, segments & B0001000);
+	digitalWrite(SegE, segments & B0000100);
+	digitalWrite(SegF, segments & B0000010);
+	digitalWrite(SegG, segments & B0000001);
+	// rozviceni DP podle flagu showDot
+	digitalWrite(SegDP, showDot);
 }
 
 // -------------------------------------------------------------------------------------------------
 // Multiplex dipleje
 // -------------------------------------------------------------------------------------------------
-void RefreshDisplay() {
-    // rozdeleni casu do jednotlivych cislic
-    SplitTimeToDigits();
-    
-    // zapsani cislice na prislusne misto - sekundy
-    RefreshDigit(Digit1, DigitValues[0], false); 
-    delayMicroseconds(DisplayRefreshPeriod);
-    
-    // zapsani cislice na prislusne misto - desitky sekund
-    RefreshDigit(Digit2, DigitValues[1], false); 
-    delayMicroseconds(DisplayRefreshPeriod);
-    
-    // zapsani cislice na prislusne misto - minuty
-    RefreshDigit(Digit3, DigitValues[2], true); 
-    delayMicroseconds(DisplayRefreshPeriod);
+void RefreshDisplay_7seg(int RefreshPeriod, int DutyCycle)
+{
+	// casovac pro multiplex displeje
+  static unsigned long MuxTimer = 0;
+	// inicializace pri prvnim volani
+  if(!MuxTimer) MuxTimer = millis();
+
+  // multiplexovani displeje s nastavenou periodou
+  if (millis() - MuxTimer >= RefreshPeriod) 
+	{
+		MuxTimer = millis();    // Aktualizace casu casovace pro dalsi cyklus
+	
+		// rozdeleni casu na jednotlive cislice
+		SplitTimeToDigits();
+		
+		// kontrola limitu dyty cycle
+		if(DutyCycle <= 10) DutyCycle = 10;
+		if(DutyCycle >= 100) DutyCycle = 100;
+		
+		// vypocet duty cycle pro svit displeje
+		int Delay = (RefreshPeriod * DutyCycle * 10) / NumberOfDigits - 1;
+		
+		// zapsani cislice na prislusne misto - sekundy
+		SetDigit(Digit1, DigitValues[0], false); 
+		delayMicroseconds(Delay);
+		
+		// zapsani cislice na prislusne misto - desitky sekund
+		SetDigit(Digit2, DigitValues[1], false); 
+		delayMicroseconds(Delay);
+		
+		// zapsani cislice na prislusne misto - minuty
+		SetDigit(Digit3, DigitValues[2], true); 
+		delayMicroseconds(Delay);
+	}
 }
 
 // -------------------------------------------------------------------------------------------------
 // Obsluha tlacitek
 // -------------------------------------------------------------------------------------------------
-void CheckButtons() {
-  
+void CheckButtons()
+{
   // adc hodnota prevodu
   int sensorValue = analogRead(AdcTrim);
-  // prevod 10bit adc hodnoty na 8bitovou hodnotu
-  DisplayBrightness = map(sensorValue, 0, 1023, 0, 255);
+  // prevod 10bit adc hodnoty na procenta svitu displeje 0-100
+  DisplayBright_DutyCycle = map(sensorValue, 0, 1023, 0, 100);
 
+/*
+	// --------------------------------------------------------------------
+	// cteni tlacitek
+	// dodelat jednotnou funkci, ideal pres datovou strukturu
+	int DebounceDelay = 50; // Debounce doba v ms
+	static bool CurrentButtonState = false; 
+	static bool LastButtonState = false; 
+	static unsigned long LastTime = 0;
+	static unsigned long CurrentTime = millis();
   
-  
+	// cteni stavu
+	bool ReadBtnState = digitalRead(BtnInc);
+	
+	// zmena stavu
+	if(ReadBtnState != LastButtonState)
+	{
+		// aktualizace casu zmeny
+		LastTime = CurrentTime;
+	}
+	
+	// debounce
+  if ((CurrentTime - LastTime) > DebounceDelay) 
+	{
+    // stabilni zmena 
+    if (ReadBtnState != CurrentButtonState) 
+		{
+			// aktualizace stavu
+      CurrentButtonState = ReadBtnState;
+
+      // Vraci stav
+      if (CurrentButtonState == true) 
+			{
+        return true;
+      }
+    }
+  }
+	
+	// stav posledniho cteni
+	LastButtonState = ReadBtnState;
+	return false;
+	*/
+	
   /*
     static bool LastButtonState = HIGH;
     bool ButtonState = digitalRead(buttonPin);
@@ -199,17 +286,18 @@ void CheckButtons() {
 }
 
 // -------------------------------------------------------------------------------------------------
-// Posilani casu na serial
+// Obsluha serialu prijem/vysilani
 // -------------------------------------------------------------------------------------------------
-void UpdateSerialTime(){
-  
-  // interval pro zasilani serial casu
-  static unsigned long previousMillis = 0;
-  if(!previousMillis) previousMillis = millis();
+void SerialTask()
+{
+	// intervalovy casovac pro zasilani serial casu na seriovy monitor
+  static unsigned long SerialTimer = 0;
+	// inicializace pri prvnim volani
+  if(!SerialTimer) SerialTimer = millis();
 
-  // Kontrola, zda uplynul nastaveny interval 1000ms
-  if (millis() - previousMillis >= 1000) {
-    previousMillis = millis();    // Aktualizace casu
+  // Kontrola, zda uplynul nastaveny interval 1000ms, 
+  if (millis() - SerialTimer >= 1000) {
+    SerialTimer = millis();    // Aktualizace casu casovace pro dalsi cyklus
 
     // Serial print
     Serial.print("Aktualni cas ");
@@ -219,40 +307,58 @@ void UpdateSerialTime(){
     else{
       Serial.print("dekrementace: ");
     }
-    // print time
+    // print time, format je stejny jako pro multiplex
     Serial.print(DigitValues[2]);
     Serial.print(":");
     Serial.print(DigitValues[1]);
     Serial.println(DigitValues[0]);
   }
-}
-
-// -------------------------------------------------------------------------------------------------
-// Obsluha serialu
-// -------------------------------------------------------------------------------------------------
-void CheckSerial(){
-  if (Serial.available()) {
-    inSerialData = Serial.parseInt();
-    Serial.println(inSerialData);
-
-    switch(inSerialData){
-      case 0:
+	
+	// ---------------------------------------------------
+	// kontrola prijeti nove zpravy
+  if (Serial.available()) 
+	{
+		// prijeti zpravy
+    int inSerialData = Serial.read();
+		
+		// prislusna akce na zaklade prijate zpravy
+    switch(inSerialData)
+		{
+			// -------------------
+			// reset
+      case '0':
         Serial.println("RESET");
-         TimerRunning = false;
-        RealTime = 0;         // clear timer
+        RealCounter = 0;         // clear counter
         break;
-
-      case 1:
+			
+			// -------------------
+			// start
+      case '1':
         Serial.println("START");
-        StartTime = millis();
         TimerRunning = true;
         break;
-
-      case 2:
+			
+			// -------------------
+			// stop/pause
+      case '2':
         Serial.println("STOP");
         TimerRunning = false;
         break;
-       
+			
+			// -------------------
+			// inkrementace casu
+			case '+':
+        Serial.println("INKREMENT");
+				bIncrement = true;
+        break;
+			
+			// -------------------
+			// dekrementace casu
+			case '-':
+        Serial.println("DEKREMENT");
+				bIncrement = false;
+        break;
+				
       default:
         break;
     }
