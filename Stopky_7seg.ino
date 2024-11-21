@@ -11,19 +11,19 @@ const int BtnReset = A4;      // reset
 const int AdcTrim = A0;       // adc hodnota trimru
 
 // jednotlive segmenty
-const int SegA = 1; 
-const int SegB = 5; 
-const int SegC = 6; 
-const int SegD = 7; 
-const int SegE = 8; 
-const int SegF = 9; 
-const int SegG = 10;
-const int SegDP = 11;
+const int SegA = 8; 
+const int SegB = 2; 
+const int SegC = 3; 
+const int SegD = 4; 
+const int SegE = 5; 
+const int SegF = 6; 
+const int SegG = 7;
+const int SegDP = 12;
 
 // jednotlive anody
-const int Digit1 = 12;    // sekundy
-const int Digit2 = 13;    // desitky sekund
-const int Digit3 = 14;    // minuty
+const int Digit1 = 11;    // sekundy
+const int Digit2 = 10;    // desitky sekund
+const int Digit3 = 9;    // minuty
 
 // pocet digitu
 const int NumberOfDigits = 3;
@@ -56,6 +56,7 @@ void UpdateTime(void);
 void SplitTimeToDigits(void);
 void SetDigit(int digit, int value, bool showDot);
 void RefreshDisplay_7seg(int RefreshPeriod, int DutyCycle);
+void AnodeAllOFF(void);
 void CheckButtons(void);
 void SerialTask(void);
 
@@ -87,19 +88,19 @@ void setup()
 // -------------------------------------------------------------------------------------------------
 // main loop
 void loop() 
-{
-	// Obsluha seriove linky
-  SerialTask();            
-	
+{	
 	// Kontrola tlacitek a vstupnich periferek
   CheckButtons();   
 	
 	// Aktualizace mereneho casu
   UpdateTime();	
 	
+	// Obsluha seriove linky
+  SerialTask();   
+	
 	// Refresh displeje s nastavenou periodou a svitivosti
-	RefreshDisplay_7seg(10, 50);
-	//RefreshDisplay_7seg(10, DisplayBright_DutyCycle);
+	//RefreshDisplay_7seg(10, 10);
+	RefreshDisplay_7seg(10, DisplayBright_DutyCycle);
 }
 
 
@@ -110,16 +111,23 @@ void loop()
 // -------------------------------------------------------------------------------------------------
 void UpdateTime(void) 
 {	
-	// pokud timer bezi
-	if(TimerRunning == true) 
+	// casovac pro update casu
+  static unsigned long UpdaterTimer = 0;
+	// inicializace pri prvnim volani
+  if(!UpdaterTimer) UpdaterTimer = millis();
+
+  // update casu
+  if (millis() - UpdaterTimer >= 1000) 
 	{
-		// inkrement kazdou sekundu
-		if((millis() % 1000) == 0)
+		UpdaterTimer = millis();    // Aktualizace casu casovace pro dalsi cyklus
+
+		// pokud timer bezi
+		if(TimerRunning == true) 
 		{
 			// rozsviceni ledky pro kontrolu periody
-			digitalWrite(LED_BUILTIN, HIGH);
-			delay(10); 
-			digitalWrite(LED_BUILTIN, LOW);
+			//digitalWrite(LED_BUILTIN, HIGH);
+			//delay(10); 
+			//digitalWrite(LED_BUILTIN, LOW);
 			
 			// inkrementace counteru
 			if(bIncrement == true)
@@ -154,12 +162,7 @@ void SplitTimeToDigits()
 // Zobrazení cislice na 7seg
 // -------------------------------------------------------------------------------------------------
 void SetDigit(int digit, int value, bool showDot) 
-{
-	// vsechny anody OFF
-	digitalWrite(Digit1, LOW); 
-	digitalWrite(Digit2, LOW);
-	digitalWrite(Digit3, LOW); 
-	
+{	
 	// prislusna anoda ON - u multiplexu sviti vzdy jen jedna
 	digitalWrite(digit, HIGH);
 	
@@ -195,24 +198,38 @@ void RefreshDisplay_7seg(int RefreshPeriod, int DutyCycle)
 		SplitTimeToDigits();
 		
 		// kontrola limitu dyty cycle
-		if(DutyCycle <= 10) DutyCycle = 10;
+		if(DutyCycle <= 1) DutyCycle = 1;
 		if(DutyCycle >= 100) DutyCycle = 100;
 		
 		// vypocet duty cycle pro svit displeje
-		int Delay = (RefreshPeriod * DutyCycle * 10) / NumberOfDigits - 1;
+		int Delay = (RefreshPeriod * DutyCycle * 10) / NumberOfDigits;
 		
 		// zapsani cislice na prislusne misto - sekundy
 		SetDigit(Digit1, DigitValues[0], false); 
 		delayMicroseconds(Delay);
+		AnodeAllOFF();
 		
 		// zapsani cislice na prislusne misto - desitky sekund
 		SetDigit(Digit2, DigitValues[1], false); 
 		delayMicroseconds(Delay);
+		AnodeAllOFF();
 		
 		// zapsani cislice na prislusne misto - minuty
 		SetDigit(Digit3, DigitValues[2], true); 
 		delayMicroseconds(Delay);
+		AnodeAllOFF();
 	}
+}
+
+// -------------------------------------------------------------------------------------------------
+// Vsechny anody OFF
+// -------------------------------------------------------------------------------------------------
+void AnodeAllOFF(void)
+{
+	// vsechny anody OFF
+	digitalWrite(Digit1, LOW); 
+	digitalWrite(Digit2, LOW);
+	digitalWrite(Digit3, LOW); 
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -296,9 +313,9 @@ void SerialTask()
   if(!SerialTimer) SerialTimer = millis();
 
   // Kontrola, zda uplynul nastaveny interval 1000ms, 
-  if (millis() - SerialTimer >= 1000) {
+  if ((millis() - SerialTimer >= 1000) && (TimerRunning == true)) {
     SerialTimer = millis();    // Aktualizace casu casovace pro dalsi cyklus
-
+		
     // Serial print
     Serial.print("Aktualni cas ");
     if(bIncrement){
@@ -327,37 +344,57 @@ void SerialTask()
 			// -------------------
 			// reset
       case '0':
-        Serial.println("RESET");
+        Serial.println("*** RESET ***");
         RealCounter = 0;         // clear counter
         break;
 			
 			// -------------------
 			// start
       case '1':
-        Serial.println("START");
+        Serial.println("*** START ***");
         TimerRunning = true;
         break;
 			
 			// -------------------
 			// stop/pause
       case '2':
-        Serial.println("STOP");
+        Serial.println("*** STOP ***");
         TimerRunning = false;
         break;
 			
 			// -------------------
 			// inkrementace casu
 			case '+':
-        Serial.println("INKREMENT");
+        Serial.println("*** INKREMENT ***");
 				bIncrement = true;
         break;
 			
 			// -------------------
 			// dekrementace casu
 			case '-':
-        Serial.println("DEKREMENT");
+        Serial.println("*** DEKREMENT ***");
 				bIncrement = false;
         break;
+				
+			case 'L':
+			case 'l':
+				Serial.println("*** Default 5min ***");
+				RealCounter = 300;		// 5min
+				TimerRunning = false;
+				bIncrement = false;
+				break;
+				
+			case 'P':
+			case 'p':
+				Serial.println("*** Plus 30sec ***");
+				RealCounter += 30;
+				break;
+				
+			case 'M':
+			case 'm':
+				Serial.println("*** Minus 30sec ***");
+				RealCounter -= 30;
+				break;
 				
       default:
         break;
