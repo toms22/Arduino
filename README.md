@@ -1,7 +1,7 @@
 Odpoctove stopky, zobrazovani na 3 mistne 7 segmentovce.
 Defaultni cas 3 minuty, nastaveni casu po 30 sekundovych krocich, pri dosazeni casu pod 15 sekund se displej rozblika s periodou 200 ms.
-Vse vyse uvedene lze nastavit pomoci konstant na zacatku programu -> komentare v kodu.
 
+Vse vyse uvedene lze nastavit pomoci konstant na zacatku programu -> komentare v kodu.
 Minimalni nastavitelny cas je 30 sekund, maximalni 5 minut.
 
 Ovladani stopek pres seriovou linku (UART) a tlacitka
