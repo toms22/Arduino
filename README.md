@@ -24,5 +24,5 @@ Serial:
 
 !!! Dulezite info !!!
 
-Kod byl napsan pro tlacitka ktere spinaji GND a v MCU je interne pripojen Pull-Up rezistor.
-Pro tvoje zapojeni je potřeba zakomentovat #define INPUT_TESTING_PULLUP na zacatku programu, tim se obrati logika vyhodnoceni vstupu (viz. viz kod ve funkci CheckButtons())
+Kod byl napsan pro tlacitka ktere spinaji GND vuci internimu Pull-Up rezistoru v MCU.
+Pro tvoje zapojeni je potřeba zakomentovat #define INPUT_TESTING_PULLUP na zacatku programu, tim se obrati logika vyhodnoceni vstupu (viz. kod ve funkci CheckButtons())
