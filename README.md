@@ -5,6 +5,7 @@ Vse vyse uvedene lze nastavit pomoci konstant na zacatku programu -> komentare v
 Minimalni nastavitelny cas je 30 sekund, maximalni 5 minut.
 
 Ovladani stopek pres seriovou linku (UART) a tlacitka
+
 Tlacitka a analogove vstupy:
 - A0 -> Rizeni jasu displeje DutyCycle 5-100%
 - A1 -> Start
@@ -22,5 +23,6 @@ Serial:
 - 'D' nebo 'd' -> Nastaveni dekrementace casu (ladeni pri vyvoji)
 
 !!! Dulezite info !!!
+
 Kod byl napsan pro tlacitka ktere spinaji GND a v MCU je interne pripojen Pull-Up rezistor.
 Pro tvoje zapojeni je potřeba zakomentovat #define INPUT_TESTING_PULLUP na zacatku programu, tim se obrati logika vyhodnoceni vstupu (viz. viz kod ve funkci CheckButtons())
