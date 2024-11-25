@@ -4,6 +4,8 @@ Defaultni cas 3 minuty, nastaveni casu po 30 sekundovych krocich, pri dosazeni c
 Vse vyse uvedene lze nastavit pomoci konstant na zacatku programu -> komentare v kodu.
 Minimalni nastavitelny cas je 30 sekund, maximalni 5 minut.
 
+Pro debug kodu vypis stavu a kazdou sekundu vypis mereneho casu na seriovy monitor.
+
 Ovladani stopek pres seriovou linku (UART) a tlacitka
 
 Tlacitka a analogove vstupy:
