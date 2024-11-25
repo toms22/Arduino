@@ -108,11 +108,11 @@ void setup()
 	// nastaveni tlacitek, pull ups
 	for(int i = 0; i < NumberOfButtons; i++)
 	{
-		// nastaveni pullups 
+    // nastaveni pullups 
 #ifdef INPUT_TESTING_PULLUP
-		pinMode(BtnPins[i], INPUT_PULLUP);
+    pinMode(BtnPins[i], INPUT_PULLUP);
 #else
-		pinMode(BtnPins[i], INPUT);
+  pinMode(BtnPins[i], INPUT);
 #endif
 	}
 	
